@@ -41,7 +41,7 @@ import Agda.TypeChecking.Monad
     Projection(Projection), projProper, projFromType, projIndex,
     iModuleName, iImportedModules, theDef, getConstInfo,
     ignoreAbstractMode, miInterface, getVisitedModules,
-    defName, defType, funClauses, funProjection, projectionArgs,
+    defName, defType, funClauses, funProjection, projectionArgs, isProjection_,
     dataPars, dataCons,
     conPars, conData,
     recConHead, recFields, recNamedCon,
@@ -397,7 +397,7 @@ term v = do
               -- Everything else we leave non-inline
               Nothing -> do
                 e <- qname q
-                es <- args (projectionArgs $ theDef d) as
+                es <- args (projectionArgs' $ theDef d) as
                 return (curriedApply e es)
     (Con con as)         -> do
       let q = conName con
@@ -417,6 +417,13 @@ term v = do
     (MetaV _ _)          -> return (Undefined)
     (DontCare _)         -> return (Undefined)
     ExtLam{}             -> __IMPOSSIBLE__
+
+-- | Number of dropped initial arguments, tweaked to apply only
+-- on non-record projections.
+projectionArgs' :: Defn -> Int
+projectionArgs' d = case isProjection_ d of
+  Just Projection{ projProper = Nothing, projIndex = i } -> i - 1
+  _ -> 0
 
 -- Check to see if a type is a singleton, and if so, return its only
 -- member.  Singleton types are of the form T1 -> ... -> Tn -> T where
