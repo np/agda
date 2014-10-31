@@ -350,8 +350,9 @@ tag q = do
           return (Tag l ls Apply)
         (Just e, Record {}) -> do
           return (Tag l [l] (\ x xs -> apply e (x:xs)))
-        (Nothing, Record {}) -> do
-          return (Tag l [l] Apply)
+        (Nothing, Record { recConHead = con }) -> do
+          v <- visitorName (conName con)
+          return (Tag l [l] (\ x xs -> Apply (Lookup x v) xs))
         _ -> __IMPOSSIBLE__
     _ -> __IMPOSSIBLE__
 
