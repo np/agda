@@ -252,7 +252,7 @@ defn q ls t Nothing (Function { funProjection = proj, funClauses = cls }) = do
               (Lookup (Local (LocalId 0)) (last ls)))
          else
             -- For anything else we generate code, after adding (i-1) dummy lambdas
-            return (dummyLambda (i-1) (lambda cs))
+            return (dummyLambda (i-1) (either (error . (show q ++)) id (lambda cs)))
 {- OLD way of finding out whether a projection is proper (ie. from record)
         d <- getConstInfo p
         case theDef d of
@@ -265,7 +265,7 @@ defn q ls t Nothing (Function { funProjection = proj, funClauses = cls }) = do
             return (dummyLambda (i-1) (lambda cs))
 -}
       Nothing ->
-        return (lambda cs)
+        return (either (error . (show q ++)) id (lambda cs))
 defn q ls t (Just e) (Primitive {}) =
   return e
 defn q ls t _ (Primitive {}) =
@@ -347,7 +347,7 @@ tag q = do
           return (Tag l ls (\ x xs -> apply e (x:xs)))
         (Nothing, Datatype { dataCons = qs }) -> do
           ls <- mapM visitorName qs
-          return (Tag l ls Apply)
+          return (Tag l ls apply)
         (Just e, Record {}) -> do
           return (Tag l [l] (\ x xs -> apply e (x:xs)))
         (Nothing, Record { recConHead = con }) -> do

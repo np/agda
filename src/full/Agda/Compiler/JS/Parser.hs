@@ -11,6 +11,7 @@ module Agda.Compiler.JS.Parser where
 import Prelude hiding ( exp, lookup )
 import Data.List ( genericLength )
 import Data.Char ( isLetter, isAlphaNum, isDigit )
+import Data.Functor ( (<$>) )
 import Data.Map ( Map, fromList, union, empty )
 import qualified Data.Map as M
 
@@ -55,7 +56,8 @@ bracketed :: Parser a -> Parser a
 bracketed = between (punct '[')  (punct ']')
 
 quoted :: Parser a -> Parser a
-quoted = between (char '"') (punct '"')
+quoted p = between (char '"')  (punct '"')  p
+       <++ between (char '\'') (punct '\'') p
 
 stringLit :: Parser Exp
 stringLit = do s <- stringStr; return (String s)
@@ -78,7 +80,10 @@ escChr = char '\\' >> (
 
 -- Not handling all integer constants
 intLit :: Parser Exp
-intLit = do s <- munch1 isDigit; skipSpaces; return (Integer (read s))
+intLit = Integer . read <$> intStr
+
+intStr :: Parser String
+intStr = do s <- munch1 isDigit; skipSpaces; return s
 
 undef :: Parser Exp
 undef = token "undefined" >> return Undefined
@@ -112,12 +117,15 @@ binop = do
   skipSpaces
   return op
 
+memberId :: Parser MemberId
+memberId = MemberId <$> (stringStr <++ intStr)
+
 field :: (Map String Nat) -> Parser (MemberId,Exp)
 field m = do
-  l <- stringStr
+  l <- memberId
   punct ':'
   e <- exp m
-  return (MemberId l, e)
+  return (l, e)
 
 object :: (Map String Nat) -> Parser Exp
 object m = do
@@ -164,7 +172,7 @@ exp2 m = exp1 m >>= exp2' m
 exp2' :: (Map String Nat) -> Exp -> Parser Exp
 exp2' m e =
   (do es <- parened (sepBy (exp m) (punct ',')); exp2' m (Apply e es)) <++
-  (do i <- bracketed stringStr; exp2' m (Lookup e (MemberId i))) <++
+  (do i <- bracketed memberId; exp2' m (Lookup e i)) <++
   (do punct '.'; i <- identifier; exp2' m (Lookup e (MemberId i))) <++
   (do op <- binop; f <- exp0 m; exp2' m (BinOp e op f)) <++
   (return e)

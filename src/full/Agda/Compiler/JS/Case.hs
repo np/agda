@@ -12,12 +12,13 @@ import Agda.Syntax.Common ( Nat )
 
 import Agda.Compiler.JS.Pretty ( Pretty, pretty, pretties )
 import Agda.Compiler.JS.Syntax
-  ( Exp(Undefined,Local,Lambda,Object,Apply),
+  ( Exp(Undefined,Local,Lambda,Object),
     LocalId(LocalId), MemberId )
-import Agda.Compiler.JS.Substitution ( shiftFrom )
+import Agda.Compiler.JS.Substitution ( shiftFrom, apply )
 
 #include "undefined.h"
 import Agda.Utils.Impossible ( Impossible(Impossible), throwImpossible )
+import Agda.Utils.List ( allEqual )
 
 -- ECMAScript doesn't support pattern-mathching case, so
 -- we translate to a visitor pattern.  We use a decision-tree
@@ -68,9 +69,11 @@ numVars' (Tagged l ps) = 1 + numVars ps
 -- Compile a case statement to a function
 -- in lambda n cs, n is the number of parameters
 
-lambda :: [Case] -> Exp
-lambda []     = Undefined
-lambda (c:cs) = lambda' 0 0 (genericLength (pats c)) (c:cs)
+lambda :: [Case] -> Either String Exp
+lambda cs | allEqual ns = Right $ lambda' 0 0 (head ns) cs
+          | otherwise   = Left "The JS compiler does not supports varying number of arguments in clauses"
+  -- where n = minimum $ map (genericLength . pats) cs
+  where ns = map (genericLength . pats) cs
 
 -- In lambda' l m n cs,
 -- l is the number of free variables,
@@ -85,16 +88,16 @@ lambda' l m n []       = Undefined
 lambda' l 0 0 (c : cs) = body c
 lambda' l 0 n cs       = Lambda 1 (lambda' (l+1) 1 (n-1) cs)
 lambda' l m n cs       =
-  case null ts of
-    True -> lambda' l (m-1) n (map pop cs)
-    False -> visit cs (Local (LocalId (m-1))) [Object (mapWithKey (match l (m-1) n cs) ts)]
-  where
-    ts = tags cs
+  case tags cs of
+    ts | null ts   -> lambda' l (m-1) n (map pop cs)
+       | otherwise -> visit cs (Local (LocalId (m-1))) [Object (mapWithKey (match l (m-1) n cs) ts)]
 
 -- Pop cases
 
 pop :: Case -> Case
-pop (Case (VarPatt : ps) e) = (Case ps e)
+pop (Case (VarPatt : ps) e) = Case ps e
+-- pop (Case [] e)             = Case [] e -- apply e [Var 0]
+-- pop (Case (Tagged _ _ : ps) e) = Case ps e
 pop _                       = __IMPOSSIBLE__
 
 -- Cases which match a given tag/arity
@@ -116,7 +119,7 @@ refine _ _ _ = []
 visit :: [Case] -> Exp -> [Exp] -> Exp
 visit (Case (Tagged (Tag _ _ v) _ : _) _ : _ ) = v
 visit (Case (VarPatt              : _) _ : cs) = visit cs
-visit _                                        = Apply
+visit _                                        = apply
 
 -- Extract the list of possible tags, and their arity.
 
